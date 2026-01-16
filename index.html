@@ -19,12 +19,15 @@
           <div class="brand__name">数独</div>
         </div>
 
+        <div class="topRight" aria-label="难度与帮助">
         <div class="difficulty" role="group" aria-label="难度选择">
           <button class="diff" data-diff="1" aria-label="难度1（最简单）" title="难度 1">💗</button>
           <button class="diff" data-diff="2" aria-label="难度2" title="难度 2">💗💗</button>
           <button class="diff" data-diff="3" aria-label="难度3" title="难度 3">💗💗💗</button>
           <button class="diff" data-diff="4" aria-label="难度4" title="难度 4">💗💗💗💗</button>
           <button class="diff" data-diff="5" aria-label="难度5（最难）" title="难度 5">💗💗💗💗💗</button>
+        </div>
+        <button class="diff helpBtn" id="helpBtn" aria-label="玩法说明" title="玩法说明">?</button>
         </div>
       </header>
 
@@ -44,6 +47,44 @@
           <div class="pad" id="pad" aria-label="数字键盘"></div>
         </section>
       </main>
+
+      <div class="modal" id="helpModal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="玩法说明">
+        <div class="modal__backdrop" id="helpBackdrop" aria-hidden="true"></div>
+        <div class="modal__card" role="document">
+          <div class="modal__head">
+            <div class="modal__title">数独怎么玩</div>
+            <button class="modal__close" id="helpCloseBtn" type="button" aria-label="关闭">×</button>
+          </div>
+          <div class="modal__body">
+            <div class="help__sec">
+              <div class="help__h">基本规则：三不重复</div>
+              <ul class="help__list">
+                <li>每行：1-9 各出现一次</li>
+                <li>每列：1-9 各出现一次</li>
+                <li>每个 3×3 宫：1-9 各出现一次</li>
+              </ul>
+            </div>
+            <div class="help__sec">
+              <div class="help__h">新手小技巧</div>
+              <ul class="help__list">
+                <li>先选一个空格，再点下面的数字</li>
+                <li>用“笔记”把可能数字记在格子里</li>
+                <li>如果某格只剩一个可能，就可以直接填</li>
+                <li>数字变红表示和同行/同列/同宫冲突</li>
+              </ul>
+            </div>
+            <div class="help__sec">
+              <div class="help__h">按钮说明</div>
+              <ul class="help__list">
+                <li>新：重新开一局</li>
+                <li>笔记：切换候选数字模式</li>
+                <li>提示：帮你填一个“最容易确定”的格子</li>
+                <li>擦：清空选中的格子</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="toast" id="toast" aria-live="polite" aria-atomic="true"></div>
     </div>

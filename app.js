@@ -13,6 +13,27 @@
     return (Date.now() ^ ((Math.random() * 0xffffffff) >>> 0)) >>> 0;
   }
 
+  function candidatesForIdx(grid, idx) {
+    if (grid[idx] !== 0) return [];
+    var rc = SudokuEngine.idxToRC(idx);
+    var out = [];
+    for (var v = 1; v <= 9; v++) {
+      if (SudokuEngine.isValidPlacement(grid, rc.r, rc.c, v)) out.push(v);
+    }
+    return out;
+  }
+
+  function findNakedSingle(puzzle, given) {
+    // Return { idx, val } if found, else null.
+    for (var i = 0; i < 81; i++) {
+      if (given && given[i]) continue;
+      if (puzzle[i] !== 0) continue;
+      var cands = candidatesForIdx(puzzle, i);
+      if (cands.length === 1) return { idx: i, val: cands[0] };
+    }
+    return null;
+  }
+
   function setVhUnit() {
     var vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', vh + 'px');
@@ -27,6 +48,22 @@
     toast._t = window.setTimeout(function () {
       el.className = 'toast';
     }, 900);
+  }
+
+  function safeGetLS(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function safeSetLS(key, val) {
+    try {
+      window.localStorage.setItem(key, val);
+    } catch (e) {
+      // ignore
+    }
   }
 
   function addFastTap(el, handler) {
@@ -60,6 +97,18 @@
     el.setAttribute('data-idx', String(idx));
     el.setAttribute('aria-label', '格子');
 
+    var num = document.createElement('span');
+    num.className = 'cell__num';
+    var notes = document.createElement('span');
+    notes.className = 'cell__notes';
+    for (var n = 1; n <= 9; n++) {
+      var it = document.createElement('i');
+      it.textContent = String(n);
+      notes.appendChild(it);
+    }
+    el.appendChild(num);
+    el.appendChild(notes);
+
     var rc = SudokuEngine.idxToRC(idx);
     if (rc.r % 3 === 0) el.className += ' bTop';
     if (rc.c % 3 === 0) el.className += ' bLeft';
@@ -90,6 +139,9 @@
     this.selected = -1;
     this.hintsUsed = 0;
     this.mistakes = 0;
+    this.noteMode = false;
+    this.notes = [];
+    for (var i = 0; i < 81; i++) this.notes[i] = 0;
   }
 
   Game.prototype.newGame = function (diff) {
@@ -109,6 +161,8 @@
     this.selected = -1;
     this.hintsUsed = 0;
     this.mistakes = 0;
+    this.noteMode = false;
+    for (i = 0; i < 81; i++) this.notes[i] = 0;
     return true;
   };
 
@@ -123,19 +177,42 @@
   Game.prototype.setSelectedValue = function (val) {
     if (!this.canEditSelected()) return;
     this.puzzle[this.selected] = val;
+    if (val !== 0) this.notes[this.selected] = 0;
   };
 
   Game.prototype.isSelectedWrong = function () {
     if (this.selected < 0) return false;
     var v = this.puzzle[this.selected];
     if (v === 0) return false;
-    return v !== this.solution[this.selected];
+    var rc = SudokuEngine.idxToRC(this.selected);
+    return !SudokuEngine.isValidPlacement(this.puzzle, rc.r, rc.c, v);
   };
 
   Game.prototype.applyHint = function () {
-    // If selected and editable, hint there; otherwise find first empty.
+    // Prefer "logic" hints: fill a naked single if possible.
     var idx = -1;
     if (this.selected >= 0 && !this.given[this.selected]) idx = this.selected;
+
+    if (idx >= 0 && this.puzzle[idx] === 0) {
+      var selectedCands = candidatesForIdx(this.puzzle, idx);
+      if (selectedCands.length === 1) {
+        this.puzzle[idx] = selectedCands[0];
+        this.notes[idx] = 0;
+        this.hintsUsed++;
+        return idx;
+      }
+    }
+
+    var ns = findNakedSingle(this.puzzle, this.given);
+    if (ns) {
+      this.puzzle[ns.idx] = ns.val;
+      this.notes[ns.idx] = 0;
+      this.hintsUsed++;
+      return ns.idx;
+    }
+
+    // Fallback: If selected and editable, hint there; otherwise find first empty.
+    if (idx === -1 || this.puzzle[idx] !== 0) idx = -1;
     if (idx === -1) {
       for (var i = 0; i < 81; i++) {
         if (!this.given[i] && this.puzzle[i] === 0) {
@@ -144,10 +221,31 @@
         }
       }
     }
+
     if (idx === -1) return null;
     this.puzzle[idx] = this.solution[idx];
+    this.notes[idx] = 0;
     this.hintsUsed++;
     return idx;
+  };
+
+  Game.prototype.toggleNoteMode = function () {
+    this.noteMode = !this.noteMode;
+    return this.noteMode;
+  };
+
+  Game.prototype.toggleNoteAtSelected = function (num) {
+    if (!this.canEditSelected()) return false;
+    if (this.puzzle[this.selected] !== 0) return false;
+    if (num < 1 || num > 9) return false;
+    var bit = 1 << (num - 1);
+    this.notes[this.selected] ^= bit;
+    return true;
+  };
+
+  Game.prototype.clearSelectedNotes = function () {
+    if (this.selected < 0) return;
+    this.notes[this.selected] = 0;
   };
 
   function UI(game) {
@@ -156,8 +254,11 @@
     this.padEl = $('pad');
     this.statusEl = $('status');
     this.cells = [];
+    this.cellNums = [];
+    this.cellNoteItems = [];
     this.keys = [];
     this.diffButtons = Array.prototype.slice.call(document.querySelectorAll('.diff'));
+    this.noteBtnEl = null;
     this.isBusy = false;
   }
 
@@ -171,10 +272,43 @@
     this.buildBoard();
     this.buildPad();
     this.wireTopButtons();
+    this.wireHelp();
     this.setDifficultyActive(this.game.diff);
 
     // Default easiest
     this.startNewGame(DEFAULT_DIFF, '✨');
+  };
+
+  UI.prototype.wireHelp = function () {
+    var modal = $('helpModal');
+    var openBtn = $('helpBtn');
+    var closeBtn = $('helpCloseBtn');
+    var backdrop = $('helpBackdrop');
+
+    function open() {
+      if (!modal) return;
+      modal.className = 'modal isOpen';
+      modal.setAttribute('aria-hidden', 'false');
+      safeSetLS('sdk_seen_help', '1');
+    }
+
+    function close() {
+      if (!modal) return;
+      modal.className = 'modal';
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    if (openBtn) addFastTap(openBtn, open);
+    if (closeBtn) addFastTap(closeBtn, close);
+    if (backdrop) addFastTap(backdrop, close);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') close();
+    });
+
+    if (safeGetLS('sdk_seen_help') !== '1') {
+      window.setTimeout(open, 280);
+    }
   };
 
   UI.prototype.setBusy = function (busy) {
@@ -185,12 +319,22 @@
 
   UI.prototype.startNewGame = function (diff, toastMsg) {
     var self = this;
+    self.ensureNoteButton();
+    if (self.noteBtnEl) {
+      addFastTap(self.noteBtnEl, function () {
+        var on = self.game.toggleNoteMode();
+        self.updateNoteButton();
+        toast(on ? '笔记：开' : '笔记：关');
+        self.renderAll();
+      });
+    }
     if (self.isBusy) return;
     self.setBusy(true);
     self.statusEl.textContent = '⏳';
     if (toastMsg) toast(toastMsg);
     window.setTimeout(function () {
       self.game.newGame(diff);
+      self.updateNoteButton();
       self.setDifficultyActive(self.game.diff);
       self.setBusy(false);
       self.renderAll();
@@ -201,15 +345,21 @@
     var self = this;
     this.boardEl.innerHTML = '';
     this.cells = [];
+    this.cellNums = [];
+    this.cellNoteItems = [];
     for (var i = 0; i < 81; i++) {
       (function (idx) {
         var cell = makeCellEl(idx);
+        var numEl = cell.querySelector('.cell__num');
+        var noteItems = Array.prototype.slice.call(cell.querySelectorAll('.cell__notes i'));
         addFastTap(cell, function () {
           self.game.select(idx);
           self.renderAll();
         });
         self.boardEl.appendChild(cell);
         self.cells.push(cell);
+        self.cellNums.push(numEl);
+        self.cellNoteItems.push(noteItems);
       })(i);
     }
   };
@@ -230,6 +380,32 @@
     }
   };
 
+  UI.prototype.ensureNoteButton = function () {
+    var btn = $('noteBtn');
+    if (!btn) {
+      var quick = document.querySelector('.quick');
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn big';
+      btn.id = 'noteBtn';
+      btn.setAttribute('aria-label', '笔记模式');
+      btn.title = '笔记模式';
+      btn.textContent = '✏️';
+
+      var after = $('newGameBtn');
+      if (after && after.parentNode && after.parentNode === quick) after.insertAdjacentElement('afterend', btn);
+      else if (quick) quick.appendChild(btn);
+    }
+    this.noteBtnEl = btn;
+    this.updateNoteButton();
+  };
+
+  UI.prototype.updateNoteButton = function () {
+    if (!this.noteBtnEl) return;
+    if (this.game.noteMode) this.noteBtnEl.className = 'btn big isActive';
+    else this.noteBtnEl.className = 'btn big';
+  };
+
   UI.prototype.wireTopButtons = function () {
     var self = this;
     addFastTap($('newGameBtn'), function () {
@@ -237,7 +413,8 @@
     });
     addFastTap($('eraseBtn'), function () {
       if (!self.game.canEditSelected()) return;
-      self.game.setSelectedValue(0);
+      if (self.game.noteMode) self.game.clearSelectedNotes();
+      else self.game.setSelectedValue(0);
       self.renderAll();
     });
     addFastTap($('hintBtn'), function () {
@@ -271,6 +448,29 @@
 
   UI.prototype.onNumber = function (num) {
     if (this.isBusy) return;
+
+    if (this.game.noteMode) {
+      if (!this.game.canEditSelected()) {
+        for (var ii = 0; ii < 81; ii++) {
+          if (!this.game.given[ii] && this.game.puzzle[ii] === 0) {
+            this.game.select(ii);
+            break;
+          }
+        }
+      }
+      if (!this.game.canEditSelected()) {
+        toast('先选一个空格');
+        this.renderAll();
+        return;
+      }
+      if (!this.game.toggleNoteAtSelected(num)) {
+        toast('先擦掉数字再记笔记');
+        return;
+      }
+      this.renderAll();
+      toast('记下啦');
+      return;
+    }
     if (!this.game.canEditSelected()) {
       // Kid-friendly: if not selected, auto-pick an empty cell.
       for (var i = 0; i < 81; i++) {
@@ -352,8 +552,11 @@
       // Same number highlight (kid-friendly matching).
       if (selectedVal && v === selectedVal) base += ' isSame';
 
-      // Wrong only for editable cells.
-      if (!g.given[i] && v !== 0 && v !== g.solution[i]) base += ' isWrong';
+      // Conflict highlight: violates row/col/box rules.
+      if (!g.given[i] && v !== 0) {
+        var rc2 = SudokuEngine.idxToRC(i);
+        if (!SudokuEngine.isValidPlacement(g.puzzle, rc2.r, rc2.c, v)) base += ' isWrong';
+      }
 
       // Borders
       var rc = SudokuEngine.idxToRC(i);
@@ -363,7 +566,21 @@
       if (rc.c % 3 === 2) base += ' bRight';
 
       el.className = base;
-      el.textContent = v === 0 ? '' : String(v);
+      var numEl = this.cellNums[i];
+      if (numEl) numEl.textContent = v === 0 ? '' : String(v);
+
+      var notesMask = g.notes[i] >>> 0;
+      var hasNotes = !g.given[i] && v === 0 && notesMask !== 0;
+      if (hasNotes) base += ' hasNotes';
+      el.className = base;
+
+      var items = this.cellNoteItems[i];
+      if (items && items.length === 9) {
+        for (var nn = 0; nn < 9; nn++) {
+          if (hasNotes && (notesMask & (1 << nn))) items[nn].className = 'on';
+          else items[nn].className = '';
+        }
+      }
       el.disabled = false;
       if (g.given[i]) el.setAttribute('aria-label', '固定数字 ' + v);
       else el.setAttribute('aria-label', v ? ('数字 ' + v) : '空格');
