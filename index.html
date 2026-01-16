@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#ff5aa8" />
+    <meta name="description" content="粉色系儿童数独：5个难度，默认最简单，提示功能，无限制错误机会。" />
+    <title>粉色数独</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app" aria-label="数独游戏">
+      <header class="top">
+        <div class="brand" aria-label="粉色数独">
+          <div class="brand__logo" aria-hidden="true">🌸</div>
+          <div class="brand__name">数独</div>
+        </div>
+
+        <div class="difficulty" role="group" aria-label="难度选择">
+          <button class="diff" data-diff="1" aria-label="难度1（最简单）" title="难度 1">💗</button>
+          <button class="diff" data-diff="2" aria-label="难度2" title="难度 2">💗💗</button>
+          <button class="diff" data-diff="3" aria-label="难度3" title="难度 3">💗💗💗</button>
+          <button class="diff" data-diff="4" aria-label="难度4" title="难度 4">💗💗💗💗</button>
+          <button class="diff" data-diff="5" aria-label="难度5（最难）" title="难度 5">💗💗💗💗💗</button>
+        </div>
+      </header>
+
+      <main class="main">
+        <section class="boardWrap" aria-label="棋盘">
+          <div class="board" id="board" role="grid" aria-label="数独棋盘"></div>
+          <div class="status" id="status" aria-live="polite"></div>
+        </section>
+
+        <section class="controls" aria-label="操作区">
+          <div class="quick">
+            <button class="btn big" id="newGameBtn" aria-label="新游戏" title="新游戏">🔄</button>
+            <button class="btn big" id="hintBtn" aria-label="提示" title="提示">💡</button>
+            <button class="btn big" id="eraseBtn" aria-label="擦除" title="擦除">🧽</button>
+          </div>
+
+          <div class="pad" id="pad" aria-label="数字键盘"></div>
+        </section>
+      </main>
+
+      <div class="toast" id="toast" aria-live="polite" aria-atomic="true"></div>
+    </div>
+
+    <script src="./sudoku.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
