@@ -142,7 +142,8 @@
 
   function difficultyToClues(diff) {
     // More clues => easier.
-    if (diff === 1) return 45;
+    // Diff 1 (kids): each row/col/box <= 2 blanks => at most 18 blanks => 63 clues.
+    if (diff === 1) return 63;
     if (diff === 2) return 38;
     if (diff === 3) return 32;
     if (diff === 4) return 28;
@@ -154,6 +155,28 @@
     var puzzle = cloneGrid(solution);
     var targetClues = difficultyToClues(diff);
     var toRemove = 81 - targetClues;
+
+    function blanksInRow(r) {
+      var count = 0;
+      for (var c = 0; c < 9; c++) if (puzzle[rcToIdx(r, c)] === 0) count++;
+      return count;
+    }
+    function blanksInCol(c) {
+      var count = 0;
+      for (var r = 0; r < 9; r++) if (puzzle[rcToIdx(r, c)] === 0) count++;
+      return count;
+    }
+    function blanksInBox(r, c) {
+      var count = 0;
+      var br = Math.floor(r / 3) * 3;
+      var bc = Math.floor(c / 3) * 3;
+      for (var rr = br; rr < br + 3; rr++) {
+        for (var cc = bc; cc < bc + 3; cc++) {
+          if (puzzle[rcToIdx(rr, cc)] === 0) count++;
+        }
+      }
+      return count;
+    }
 
     // Random removal order
     var order = [];
@@ -174,6 +197,15 @@
       var backup = puzzle[idx];
       puzzle[idx] = 0;
       tries++;
+
+      // Diff 1 constraint: each row/col/3x3 box has at most 2 blanks.
+      if (diff === 1) {
+        var rc = idxToRC(idx);
+        if (blanksInRow(rc.r) > 2 || blanksInCol(rc.c) > 2 || blanksInBox(rc.r, rc.c) > 2) {
+          puzzle[idx] = backup;
+          continue;
+        }
+      }
 
       // Keep unique solution.
       var solutions = countSolutions(puzzle, 2);
