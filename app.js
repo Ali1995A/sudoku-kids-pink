@@ -491,6 +491,15 @@
         return;
       }
     }
+
+    // Prevent "looks-valid-now" but wrong numbers that make the game feel unsolvable later.
+    // For kids, immediate feedback is better than letting a hidden mistake propagate.
+    if (this.game.solution && num !== this.game.solution[this.game.selected]) {
+      this.game.mistakes++;
+      toast('❌');
+      this.renderAll();
+      return;
+    }
     this.game.setSelectedValue(num);
     if (this.game.isSelectedWrong()) this.game.mistakes++;
     this.renderAll();
