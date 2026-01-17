@@ -146,6 +146,10 @@ body{
   color: var(--ink);
   user-select:none;
   -webkit-user-select:none;
+  transition: transform .08s ease-out, box-shadow .12s ease-out, background .12s ease-out, border-color .12s ease-out;
+}
+.cell.boxAlt{
+  background: #fff1f9;
 }
 
 .cell__num{
@@ -179,15 +183,29 @@ body{
 }
 
 .cell.isGiven{
-  background: linear-gradient(180deg, #fff, #fff0f8);
   border-color: rgba(255,90,168,.35);
 }
-.cell.isSelected{
-  outline: 4px solid rgba(255,90,168,.55);
-  outline-offset: 0;
+.cell.isSelected:not(.isWrong){
+  z-index: 1;
+  border-color: rgba(255,45,120,.95);
+  background: radial-gradient(circle at 50% 35%, #ffffff 0%, #fff6fb 32%, #ffd0e8 72%, #ffb5d8 120%);
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.95),
+    0 0 0 8px rgba(255,90,168,.75),
+    0 18px 34px rgba(255,90,168,.28);
+  transform: translateY(-1px) scale(1.02);
+}
+.cell.isSelected:not(.isWrong)::after{
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 18px;
+  pointer-events: none;
+  box-shadow: 0 0 0 0 rgba(255,90,168,.55);
+  animation: selPulse 1.25s ease-in-out infinite;
 }
 .cell.isPeer{
-  background: #fff7fd;
+  background: rgba(255,90,168,.06);
 }
 .cell.isSame{
   background: #ffe7f4;
@@ -201,16 +219,81 @@ body{
 .cell.isHint{
   animation: pop .35s ease-out 1;
 }
+.cell.isCorrect{
+  animation: correctBlink .28s ease-out 1;
+}
 
 .cell.bTop{ border-top-width: 4px; }
 .cell.bLeft{ border-left-width: 4px; }
 .cell.bRight{ border-right-width: 4px; }
 .cell.bBottom{ border-bottom-width: 4px; }
 
+/* Stronger 3×3 box boundaries (without overriding error state). */
+.cell.bTop:not(.isWrong){ border-top-color: rgba(255,90,168,.60); }
+.cell.bLeft:not(.isWrong){ border-left-color: rgba(255,90,168,.60); }
+.cell.bRight:not(.isWrong){ border-right-color: rgba(255,90,168,.60); }
+.cell.bBottom:not(.isWrong){ border-bottom-color: rgba(255,90,168,.60); }
+
 @keyframes pop{
   0%{ transform: scale(.9); }
   60%{ transform: scale(1.03); }
   100%{ transform: scale(1); }
+}
+
+@keyframes selPulse{
+  0%{ box-shadow: 0 0 0 0 rgba(255,90,168,.45); opacity: .95; }
+  70%{ box-shadow: 0 0 0 10px rgba(255,90,168,0); opacity: .35; }
+  100%{ box-shadow: 0 0 0 0 rgba(255,90,168,0); opacity: 0; }
+}
+
+@keyframes correctBlink{
+  0%{
+    background: radial-gradient(circle at 50% 35%, #ffffff 0%, #fff6fb 35%, #ffd0e8 90%);
+    box-shadow:
+      0 0 0 3px rgba(255,255,255,.95),
+      0 0 0 8px rgba(56,193,114,.30),
+      0 14px 30px rgba(56,193,114,.16);
+  }
+  100%{
+    background: inherit;
+    box-shadow: inherit;
+  }
+}
+
+/* Win celebration overlay */
+.celebration{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  overflow: hidden;
+}
+.celebration__burst{
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(52px, 7vw, 92px);
+  filter: drop-shadow(0 18px 30px rgba(255,90,168,.22));
+  animation: burstPop .95s ease-out 1;
+}
+.celebration__item{
+  position: absolute;
+  top: -12vh;
+  font-size: clamp(18px, 3.4vw, 44px);
+  filter: drop-shadow(0 14px 26px rgba(255,90,168,.18));
+  animation: confettiFall 1.35s linear forwards;
+}
+@keyframes burstPop{
+  0%{ transform: translate(-50%, -50%) scale(.6); opacity: 0; }
+  20%{ opacity: 1; }
+  60%{ transform: translate(-50%, -50%) scale(1.08); }
+  100%{ transform: translate(-50%, -50%) scale(1); opacity: .92; }
+}
+@keyframes confettiFall{
+  0%{ transform: translateY(0) rotate(0deg) scale(.9); opacity: 0; }
+  10%{ opacity: 1; }
+  100%{ transform: translateY(120vh) rotate(260deg) scale(1.15); opacity: 0; }
 }
 
 .controls{
@@ -374,4 +457,29 @@ body{
   .topRight{ justify-content: center; flex-wrap: wrap; }
   .difficulty{ justify-content: center; flex-wrap: wrap; }
   .controls{ width: min(92vmin, 420px); }
+}
+
+/* iPad / tablet landscape: make the play area larger and keep board + controls side-by-side. */
+@media (min-width: 900px) and (orientation: landscape){
+  .main{
+    flex-wrap: nowrap;
+    gap: 18px;
+    align-items: center;
+  }
+  .boardWrap{
+    width: min(calc(var(--vh) * 88), 720px);
+  }
+  .controls{
+    width: min(420px, 40vw);
+    gap: 12px;
+  }
+  .pad{ gap: 12px; }
+  .key{
+    min-height: 78px;
+    font-size: 34px;
+  }
+  .btn.big{
+    min-height: 60px;
+    font-size: 28px;
+  }
 }

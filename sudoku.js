@@ -34,7 +34,10 @@
     var s = seed >>> 0;
     return function () {
       s = (s * 1664525 + 1013904223) >>> 0;
-      return (s & 0xffffffff) / 4294967296;
+      // NOTE: Bitwise ops in JS return signed 32-bit ints; using `& 0xffffffff`
+      // can yield negative numbers and break shuffles/indices (producing undefined
+      // cells). Keep it unsigned in [0, 1).
+      return s / 4294967296;
     };
   }
 
@@ -219,4 +222,3 @@
     boxIndex: boxIndex
   };
 })();
-

@@ -110,6 +110,10 @@
     el.appendChild(notes);
 
     var rc = SudokuEngine.idxToRC(idx);
+    // Visual grouping for 3×3 boxes: alternate subtle tint by box parity.
+    var boxParity = (Math.floor(rc.r / 3) + Math.floor(rc.c / 3)) % 2;
+    el.setAttribute('data-box', String(SudokuEngine.boxIndex(rc.r, rc.c)));
+    if (boxParity) el.className += ' boxAlt';
     if (rc.r % 3 === 0) el.className += ' bTop';
     if (rc.c % 3 === 0) el.className += ' bLeft';
     if (rc.r === 8) el.className += ' bBottom';
@@ -253,6 +257,7 @@
     this.boardEl = $('board');
     this.padEl = $('pad');
     this.statusEl = $('status');
+    this.fireworks = null;
     this.cells = [];
     this.cellNums = [];
     this.cellNoteItems = [];
@@ -427,6 +432,7 @@
       self.game.select(idx);
       self.renderAll();
       self.pulseHint(idx);
+      if (SudokuEngine.isSolved(self.game.puzzle, self.game.solution)) self.celebrateWin();
       toast('💡');
     });
 
@@ -488,11 +494,13 @@
     this.game.setSelectedValue(num);
     if (this.game.isSelectedWrong()) this.game.mistakes++;
     this.renderAll();
+    if (!this.game.isSelectedWrong()) this.pulseCorrect(this.game.selected);
 
     if (this.game.isSelectedWrong()) toast('🩷');
     else toast('⭐');
 
     if (SudokuEngine.isSolved(this.game.puzzle, this.game.solution)) {
+      this.celebrateWin();
       toast('🏁');
       this.statusEl.textContent = '🏁';
     }
@@ -505,6 +513,154 @@
     window.setTimeout(function () {
       el.className = el.className.replace(' isHint', '');
     }, 420);
+  };
+
+  UI.prototype.pulseCorrect = function (idx) {
+    var el = this.cells[idx];
+    if (!el) return;
+    if (el.className.indexOf(' isCorrect') === -1) el.className += ' isCorrect';
+    window.setTimeout(function () {
+      el.className = el.className.replace(' isCorrect', '');
+    }, 280);
+  };
+
+  UI.prototype.ensureFireworks = function () {
+    if (this.fireworks && this.fireworks.canvas) return;
+    var canvas = document.createElement('canvas');
+    canvas.id = 'fireworks';
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.style.position = 'fixed';
+    canvas.style.inset = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '80';
+    canvas.style.display = 'none';
+    document.body.appendChild(canvas);
+
+    function resize() {
+      var dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      var ctx = canvas.getContext('2d');
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    this.fireworks = {
+      canvas: canvas,
+      raf: 0,
+      particles: [],
+      stopAt: 0
+    };
+  };
+
+  UI.prototype.celebrateWin = function () {
+    this.ensureFireworks();
+    this.spawnCelebrationEmojis();
+    var fw = this.fireworks;
+    if (!fw) return;
+
+    var canvas = fw.canvas;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (fw.raf) window.cancelAnimationFrame(fw.raf);
+    fw.particles = [];
+    fw.stopAt = Date.now() + 1400;
+    canvas.style.display = 'block';
+
+    var colors = ['#ff5aa8', '#ff2d55', '#ff85c1', '#ffd0e8', '#ffe070', '#ffffff', '#38c172'];
+    function burst() {
+      var w = window.innerWidth;
+      var h = window.innerHeight;
+      var x = w * (0.18 + Math.random() * 0.64);
+      var y = h * (0.16 + Math.random() * 0.44);
+      var n = 90 + ((Math.random() * 40) | 0);
+      for (var i = 0; i < n; i++) {
+        var a = Math.random() * Math.PI * 2;
+        var sp = 2.8 + Math.random() * 6.2;
+        fw.particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp - (1.6 + Math.random() * 0.8),
+          life: 34 + ((Math.random() * 22) | 0),
+          size: 3.5 + Math.random() * 3.2,
+          color: colors[(Math.random() * colors.length) | 0]
+        });
+      }
+    }
+
+    for (var b = 0; b < 7; b++) {
+      (function (t) { window.setTimeout(burst, t); })(b * 180);
+    }
+    burst();
+
+    function step() {
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      ctx.globalCompositeOperation = 'lighter';
+      for (var i = fw.particles.length - 1; i >= 0; i--) {
+        var p = fw.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.12;
+        p.vx *= 0.985;
+        p.vy *= 0.985;
+        p.life--;
+        if (p.life <= 0) {
+          fw.particles.splice(i, 1);
+          continue;
+        }
+        ctx.beginPath();
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0.25, Math.min(1, p.life / 32));
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      if (Date.now() < fw.stopAt || fw.particles.length) {
+        fw.raf = window.requestAnimationFrame(step);
+      } else {
+        fw.raf = 0;
+        canvas.style.display = 'none';
+      }
+    }
+    step();
+  };
+
+  UI.prototype.spawnCelebrationEmojis = function () {
+    // Lightweight, very-visible celebration (in addition to canvas particles).
+    var prev = document.getElementById('celebration');
+    if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+    var wrap = document.createElement('div');
+    wrap.id = 'celebration';
+    wrap.className = 'celebration';
+    wrap.setAttribute('aria-hidden', 'true');
+
+    var burst = document.createElement('div');
+    burst.className = 'celebration__burst';
+    burst.textContent = '🎆';
+    wrap.appendChild(burst);
+
+    var icons = ['✨', '🎉', '🎇', '💖', '⭐'];
+    for (var i = 0; i < 22; i++) {
+      var it = document.createElement('div');
+      it.className = 'celebration__item';
+      it.textContent = icons[(Math.random() * icons.length) | 0];
+      it.style.left = (Math.random() * 100).toFixed(2) + 'vw';
+      it.style.animationDelay = (Math.random() * 0.35).toFixed(2) + 's';
+      it.style.animationDuration = (1.05 + Math.random() * 0.65).toFixed(2) + 's';
+      wrap.appendChild(it);
+    }
+
+    document.body.appendChild(wrap);
+    window.setTimeout(function () {
+      if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    }, 1600);
   };
 
   UI.prototype.renderAll = function () {
