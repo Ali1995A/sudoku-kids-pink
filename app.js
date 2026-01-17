@@ -4,6 +4,58 @@
 
   var DEFAULT_DIFF = 1;
 
+  function createSfx() {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    var ctx = null;
+
+    function ensure() {
+      if (!Ctx) return null;
+      if (!ctx) ctx = new Ctx();
+      return ctx;
+    }
+
+    function unlock() {
+      try {
+        var c = ensure();
+        if (c && c.state === 'suspended') c.resume();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    function tone(freq, durMs, type) {
+      var c = ensure();
+      if (!c || c.state === 'suspended') return;
+      var now = c.currentTime;
+      var dur = Math.max(0.03, durMs / 1000);
+
+      var osc = c.createOscillator();
+      var gain = c.createGain();
+      osc.type = type || 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+
+      // Soft attack/decay to avoid clicks; kid-friendly volume.
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+      osc.connect(gain);
+      gain.connect(c.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+    }
+
+    function playCorrect() {
+      // A short "ding" (two notes).
+      tone(880, 70, 'triangle');
+      window.setTimeout(function () {
+        tone(1175, 95, 'triangle');
+      }, 72);
+    }
+
+    return { unlock: unlock, playCorrect: playCorrect };
+  }
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -258,6 +310,7 @@
     this.padEl = $('pad');
     this.statusEl = $('status');
     this.fireworks = null;
+    this.sfx = createSfx();
     this.cells = [];
     this.cellNums = [];
     this.cellNoteItems = [];
@@ -273,6 +326,15 @@
     window.addEventListener('orientationchange', function () {
       window.setTimeout(setVhUnit, 50);
     });
+
+    // iOS/Safari requires audio to be unlocked by a user gesture.
+    var self = this;
+    function unlockAudio() {
+      if (self.sfx) self.sfx.unlock();
+    }
+    document.addEventListener('touchstart', unlockAudio, { passive: true, once: true });
+    document.addEventListener('mousedown', unlockAudio, { once: true });
+    document.addEventListener('keydown', unlockAudio, { once: true });
 
     this.buildBoard();
     this.buildPad();
@@ -432,6 +494,7 @@
       self.game.select(idx);
       self.renderAll();
       self.pulseHint(idx);
+      self.pulseCorrect(idx);
       if (SudokuEngine.isSolved(self.game.puzzle, self.game.solution)) self.celebrateWin();
       toast('💡');
     });
@@ -494,7 +557,9 @@
     this.game.setSelectedValue(num);
     if (this.game.isSelectedWrong()) this.game.mistakes++;
     this.renderAll();
-    if (!this.game.isSelectedWrong()) this.pulseCorrect(this.game.selected);
+    if (!this.game.isSelectedWrong() && this.game.solution && num === this.game.solution[this.game.selected]) {
+      this.pulseCorrect(this.game.selected);
+    }
 
     if (this.game.isSelectedWrong()) toast('🩷');
     else toast('⭐');
@@ -519,6 +584,7 @@
     var el = this.cells[idx];
     if (!el) return;
     if (el.className.indexOf(' isCorrect') === -1) el.className += ' isCorrect';
+    if (this.sfx) this.sfx.playCorrect();
     window.setTimeout(function () {
       el.className = el.className.replace(' isCorrect', '');
     }, 280);
